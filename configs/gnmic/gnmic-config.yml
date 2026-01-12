@@ -5,7 +5,7 @@ timeout: 10s
 
 common_eos_subscriptions: &common_eos_subs
   skip-verify: true
-  insecure: false
+  insecure: true
   password: netadmin
   subscriptions:
     - interface-stats
