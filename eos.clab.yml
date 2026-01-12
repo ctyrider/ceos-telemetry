@@ -84,6 +84,8 @@ topology:
       binds:
         - configs/gnmic/gnmic-config.yml:/gnmic-config.yml:ro
       cmd: --config /gnmic-config.yml --log subscribe
+      ports:
+        - 9804:9804
       group: "10" # group 10 is assigned to the nodes of a telemetry stack
 
     prometheus:
