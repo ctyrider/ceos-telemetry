@@ -1,68 +1,177 @@
 # gNMIC Configuration for Arista EOS
 
 username: netadmin
+password: netadmin
+port: 6030
 timeout: 10s
-
-common_eos_subscriptions: &common_eos_subs
-  skip-verify: true
-  insecure: true
-  password: netadmin
-  encoding: json_ietf
-  subscriptions:
-    - interface-stats
-    - system-info
-    - bgp-sessions
+skip-verify: true
+encoding: json_ietf
+#debug: true
 
 targets:
   cfsa-cnt1-0001:
       address: cfsa-cnt1-0001:6030
-      <<: *common_eos_subs
+      insecure: true
   cfsa-cnt1-0002:
       address: cfsa-cnt1-0002:6030
-      <<: *common_eos_subs
+      insecure: true
   cfsa-cnt1-0201a:
       address: cfsa-cnt1-0201a:6030
-      <<: *common_eos_subs
+      insecure: true
   cfsa-cnt1-0201b:
       address: cfsa-cnt1-0201b:6030
-      <<: *common_eos_subs
+      insecure: true
   #cfsa-cnt1-0202a:
       #address: cfsa-cnt1-0202a:6030
-      #<<: *common_eos_subs
+      #insecure: true
   #cfsa-cnt1-0202b:
       #address: cfsa-cnt1-0202b:6030
-      #<<: *common_eos_subs
+      #insecure: true
 
 subscriptions:
-  # Interface Statistics (OpenConfig Path)
-  interface-stats:
+  bgp_neighbors:
     paths:
-      - /interfaces/interface/state/counters
+      - /network-instances/network-instance[name=default]/protocols/protocol[name=BGP]/bgp/neighbors
     mode: stream
     stream-mode: sample
-    sample-interval: 10s
+    sample-interval: 5s
 
-  # System Information (OpenConfig Path)
-  system-info:
+  cpu:
     paths:
-      - /system/state
+      - components/component/cpu
+    mode: stream
+    stream-mode: sample
+    sample-interval: 5s
+
+  cpu_load_avg:
+    paths:
+      - eos_native:/Kernel/sysinfo
+    mode: stream
+    stream-mode: sample
+    sample-interval: 5s
+
+  mem:
+    mode: stream
+    stream-mode: sample
+    sample-interval: 5s
+    paths:
+      - components/component/state/memory
+      - system/memory/kernel/state
+      - system/memory/state
+
+  sw_info:
+    paths:
+      - components/component/state/software-version
+      - components/component/state/serial-no
+    mode: stream
+    stream-mode: sample
+    sample-interval: 5s
+
+  intf_ctrs:
+    paths:
+      - /interfaces/interface[name=*]/state/counters
+    mode: stream
+    stream-mode: sample
+    sample-interval: 5s
+
+  intf_admin_state:
+    paths:
+      - /interfaces/interface[name=*]/state/admin-status
+    mode: stream
+    stream-mode: sample
+    sample-interval: 5s
+
+  intf_oper_state:
+    paths:
+      - /interfaces/interface[name=*]/state/oper-status
+    mode: stream
+    stream-mode: sample
+    sample-interval: 5s
+
+  intf_config:
+    paths:
+      - interfaces/interface/subinterfaces/subinterface/ipv4/addresses/address/config
+    mode: stream
+    stream-mode: sample
+    sample-interval: 5s
+
+  show_ver:
+    paths:
+    - eos_native:/Eos/image
     mode: stream
     stream-mode: sample
     sample-interval: 60s
 
-  # BGP Sessions (OpenConfig Path)
-  bgp-sessions:
+  boot_time:
     paths:
-      - /network-instances/network-instance/protocols/protocol/bgp/neighbors/neighbor/state
+    - system/state/boot-time
     mode: stream
-    stream-mode: on-change
+    stream-mode: sample
+    sample-interval: 60s
+
+  hardware:
+    paths:
+    - components/component/state
+    - eos_native:/Sysdb/hardware/entmib
+    mode: stream
+    stream-mode: sample
+    sample-interval: 60s
 
 outputs:
   prom-output:
     type: prometheus
-    listen: :9273
+    listen: "0.0.0.0:9273"
     metric-prefix: gnmic
     append-subscription-name: true
     strings-as-labels: true
     export-timestamps: true
     debug: false
+    event-processors:
+      - trim-prefixes
+      - bounce-map
+      - eos-version
+      # - tag-status
+      #- set-timestamp-processor
+  # stdout:
+  #   type: file
+  #   file-type: stdout
+  #   event-processors:
+  #     - proc-convert-strings-to-int
+  #     - trim-prefixes
+
+processors:
+  eos-version:
+    event-strings:
+      value-names:
+        - ".*version$"
+        - ".*arch$"
+      transforms:
+        - replace:
+            apply-on: "value"
+            old: "EOS"
+            new: "eos"
+    # event-to-tag:
+    #   value-names:
+    #     - ".*version$"
+    #     - ".*arch$"
+  trim-prefixes:
+    event-strings:
+      value-names:
+        - ".*"
+      transforms:
+        - path-base:
+            apply-on: "name"
+  bounce-map:
+    event-strings:
+      value-names:
+        - oper-status
+        - admin-status
+      transforms:
+        - replace:
+            apply-on: "value"
+            old: "UP"
+            new: "1"
+        - replace:
+            apply-on: "value"
+            old: "DOWN"
+            new: "0"
